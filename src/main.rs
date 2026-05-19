@@ -43,11 +43,16 @@ use tempfile::NamedTempFile;
 use url::Url;
 
 use crate::info::info;
+use crate::proc_error::ProcError;
 
 mod info;
 mod tree;
 
 mod signer;
+
+mod cloud_signer;
+mod cloud_url;
+mod proc_error;
 
 /// Official C2PA conformance trust list (PEM bundle).
 const TRUST_LIST_OFFICIAL_URL: &str =
@@ -164,6 +169,24 @@ struct CliArgs {
     /// declare this via `--signer-info` instead.
     #[clap(long, hide = true, default_value("20000"))]
     reserve_size: usize,
+
+    /// Cloud signer base URL (e.g. https://c2pa-cloud-signer-boe.bytedance.net).
+    /// Use "auto" to detect by IDC. Required when `--cloud-jwt-token` is supplied.
+    #[clap(long)]
+    signer_url: Option<String>,
+
+    /// Cloud signer app id. Required when `--cloud-jwt-token` is supplied.
+    #[clap(long, default_value = "")]
+    cloud_app_id: String,
+
+    /// Path to a file containing the JWT token used to authenticate to the cloud signer.
+    /// Presence of this flag enables cloud-signer mode.
+    #[clap(long)]
+    cloud_jwt_token: Option<PathBuf>,
+
+    /// Enable timestamping authority during cloud signing.
+    #[clap(long)]
+    use_time_authority: bool,
 
     // TODO: ideally this would be called config, not to be confused with the other config arg
     /// Path to the settings file in JSON or TOML.
@@ -957,7 +980,23 @@ pub(crate) fn folder_mode_output_path_ok(path: &Path) -> bool {
     !path.exists() || path.is_dir()
 }
 
-fn main() -> Result<()> {
+fn main() {
+    match do_main() {
+        Ok(_) => std::process::exit(0),
+        Err(e) => {
+            eprintln!("{e:?}");
+            // 如果错误来源是 ProcError，使用其分段退出码（200+ 云签 / 100+ C2PA / 1~5 通用）；
+            // 否则回落到 1。
+            let code = e
+                .downcast_ref::<ProcError>()
+                .map(|pe| pe.exit_code())
+                .unwrap_or(1);
+            std::process::exit(code);
+        }
+    }
+}
+
+fn do_main() -> Result<()> {
     let args = CliArgs::parse();
 
     // default to error logging, RUST_LOG=debug to get detailed debug logging
@@ -1119,7 +1158,42 @@ fn main() -> Result<()> {
         }
 
         // Step 1: build the base C2PA signer.
-        let c2pa_signer: BoxedSigner = if let Some(ref signer_cmd) = args.signer_path {
+        // 优先：当 --cloud-jwt-token 提供时走云签分支（公司适配）。
+        let cloud_for_take: Option<Arc<cloud_signer::CloudSigner>>;
+        let c2pa_signer: BoxedSigner = if let Some(jwt_token_file) = args.cloud_jwt_token.as_ref() {
+            let mut base_url = args
+                .signer_url
+                .clone()
+                .unwrap_or_else(|| "auto".to_string());
+            if base_url == "auto" {
+                base_url = cloud_url::auto_detect_sign_url()
+                    .ok_or(ProcError::FailedToGetSignerUrl)?;
+            }
+            let jwt_token = std::fs::read_to_string(jwt_token_file).map_err(|e| {
+                ProcError::IoError(jwt_token_file.display().to_string(), e)
+            })?;
+            let mut cloud = cloud_signer::CloudSigner::new(
+                base_url,
+                args.cloud_app_id.clone(),
+                jwt_token.trim().to_string(),
+                args.reserve_size,
+            )
+            .map_err(ProcError::SignerError)?;
+            if args.use_time_authority {
+                cloud.enable_time_authority();
+            }
+            if let Some(url) = sign_config.ta_url.clone() {
+                cloud.set_time_authority_url(url);
+            } else if let Some(url) = signer::get_ta_url() {
+                cloud.set_time_authority_url(url);
+            }
+            // 用 Arc 共享：一份给 builder（newtype 包装成 dyn Signer），一份留作旁路句柄
+            // 在 sign 失败时回取详细 CloudSignError。
+            let cloud = Arc::new(cloud);
+            cloud_for_take = Some(cloud.clone());
+            Box::new(cloud_signer::ArcCloudSigner(cloud))
+        } else if let Some(ref signer_cmd) = args.signer_path {
+            cloud_for_take = None;
             let (signer_binary, signer_base_args) = parse_command(signer_cmd);
             let (cert_bytes, alg, tsa_url, reserve_size, compat_mode) =
                 match sign_config.sign_cert.clone() {
@@ -1158,8 +1232,10 @@ fn main() -> Result<()> {
                 compat_mode,
             )?
         } else if let Some(signer_cfg) = settings.signer.take() {
+            cloud_for_take = None;
             signer_cfg.c2pa_signer()?
         } else {
+            cloud_for_take = None;
             sign_config.signer()?
         };
 
@@ -1242,9 +1318,18 @@ fn main() -> Result<()> {
                 }
 
                 let manifest_data = if *path != output {
-                    builder
-                        .sign_file(signer.as_ref(), path, &output)
-                        .context("embedding manifest")?
+                    match builder.sign_file(signer.as_ref(), path, &output) {
+                        Ok(d) => d,
+                        Err(e) => {
+                            // 云签分支：从旁路句柄回取详细 CloudSignError，使退出码命中 200+ 段位
+                            if let Some(cs) =
+                                cloud_for_take.as_ref().and_then(|c| c.take_sign_error())
+                            {
+                                return Err(ProcError::SignerError(cs).into());
+                            }
+                            return Err(anyhow::Error::from(e).context("embedding manifest"));
+                        }
+                    }
                 } else {
                     let mut file = NamedTempFile::new()?;
                     let format = format_from_path(path)
@@ -1256,8 +1341,19 @@ fn main() -> Result<()> {
                             builder.definition.title = Some(title.to_string_lossy().to_string());
                         }
                     }
-                    let manifest_data =
-                        builder.sign(signer.as_ref(), &format, &mut source, &mut file)?;
+                    let manifest_data = match builder
+                        .sign(signer.as_ref(), &format, &mut source, &mut file)
+                    {
+                        Ok(d) => d,
+                        Err(e) => {
+                            if let Some(cs) =
+                                cloud_for_take.as_ref().and_then(|c| c.take_sign_error())
+                            {
+                                return Err(ProcError::SignerError(cs).into());
+                            }
+                            return Err(anyhow::Error::from(e));
+                        }
+                    };
 
                     if !output.exists() {
                         // ensure the path to the file exists
