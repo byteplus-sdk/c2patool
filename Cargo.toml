@@ -50,6 +50,7 @@ openssl = { version = "0.10", features = ["vendored"] }
 base64 = "0.22"
 ureq = { version = "3.0", features = ["json"] }
 thiserror = "1.0"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 
 [target.'cfg(target_os = "wasi")'.dependencies]
 wasi = "0.14"

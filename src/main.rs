@@ -51,7 +51,6 @@ mod tree;
 mod signer;
 
 mod cloud_signer;
-mod cloud_url;
 mod proc_error;
 
 /// Official C2PA conformance trust list (PEM bundle).
@@ -170,19 +169,38 @@ struct CliArgs {
     #[clap(long, hide = true, default_value("20000"))]
     reserve_size: usize,
 
-    /// Cloud signer base URL (e.g. https://c2pa-cloud-signer-boe.bytedance.net).
-    /// Use "auto" to detect by IDC. Required when `--cloud-jwt-token` is supplied.
+    /// Cloud signer endpoint host (火山 OpenAPI 网关地址，例：
+    /// `https://open.volcengineapi.com`)。提供本参数即启用云签模式。
     #[clap(long)]
     signer_url: Option<String>,
 
-    /// Cloud signer app id. Required when `--cloud-jwt-token` is supplied.
+    /// 火山 AccessKey ID。云签模式必填。
     #[clap(long, default_value = "")]
-    cloud_app_id: String,
+    volc_ak: String,
 
-    /// Path to a file containing the JWT token used to authenticate to the cloud signer.
-    /// Presence of this flag enables cloud-signer mode.
-    #[clap(long)]
-    cloud_jwt_token: Option<PathBuf>,
+    /// 火山 SecretAccessKey。云签模式必填，可通过环境变量 `VOLC_SECRET_KEY` 注入。
+    #[clap(long, env = "VOLC_SECRET_KEY", default_value = "")]
+    volc_sk: String,
+
+    /// 服务地区（例：cn-north-1）。
+    #[clap(long, default_value = "cn-north-1")]
+    volc_region: String,
+
+    /// 服务名称（OpenAPI Service / ServiceName 头）。
+    #[clap(long, default_value = "c2pa_tob")]
+    volc_service: String,
+
+    /// OpenAPI Version。
+    #[clap(long, default_value = "1.0")]
+    volc_version: String,
+
+    /// C2PA 证书实例 ID（GetC2PAInstance/C2PASign 的 InstanceId）。
+    #[clap(long, default_value = "")]
+    volc_instance_id: String,
+
+    /// 火山签名算法（DIGEST 模式下使用），默认 RSASSA_PSS_SHA_256。
+    #[clap(long, default_value = "RSASSA_PSS_SHA_256")]
+    volc_signing_algorithm: String,
 
     /// Enable timestamping authority during cloud signing.
     #[clap(long)]
@@ -1158,27 +1176,28 @@ fn do_main() -> Result<()> {
         }
 
         // Step 1: build the base C2PA signer.
-        // 优先：当 --cloud-jwt-token 提供时走云签分支（公司适配）。
+        // 优先：当 --signer-url 提供时走火山云签分支（TOB 公有云适配）。
         let cloud_for_take: Option<Arc<cloud_signer::CloudSigner>>;
-        let c2pa_signer: BoxedSigner = if let Some(jwt_token_file) = args.cloud_jwt_token.as_ref() {
-            let mut base_url = args
-                .signer_url
-                .clone()
-                .unwrap_or_else(|| "auto".to_string());
-            if base_url == "auto" {
-                base_url = cloud_url::auto_detect_sign_url()
-                    .ok_or(ProcError::FailedToGetSignerUrl)?;
+        let c2pa_signer: BoxedSigner = if let Some(host) = args.signer_url.as_ref() {
+            if args.volc_ak.is_empty() || args.volc_sk.is_empty() {
+                bail!("--volc-ak / --volc-sk are required when --signer-url is provided (SK can also be set via VOLC_SECRET_KEY env)");
             }
-            let jwt_token = std::fs::read_to_string(jwt_token_file).map_err(|e| {
-                ProcError::IoError(jwt_token_file.display().to_string(), e)
-            })?;
-            let mut cloud = cloud_signer::CloudSigner::new(
-                base_url,
-                args.cloud_app_id.clone(),
-                jwt_token.trim().to_string(),
-                args.reserve_size,
-            )
-            .map_err(ProcError::SignerError)?;
+            if args.volc_instance_id.is_empty() {
+                bail!("--volc-instance-id is required when --signer-url is provided");
+            }
+            let cfg = cloud_signer::VolcSignerConfig {
+                host: host.clone(),
+                region: args.volc_region.clone(),
+                service: args.volc_service.clone(),
+                version: args.volc_version.clone(),
+                access_key: args.volc_ak.clone(),
+                secret_key: args.volc_sk.clone(),
+                instance_id: args.volc_instance_id.clone(),
+                signing_algorithm: args.volc_signing_algorithm.clone(),
+                reserve_size: args.reserve_size,
+            };
+            let mut cloud = cloud_signer::CloudSigner::new(cfg)
+                .map_err(ProcError::SignerError)?;
             if args.use_time_authority {
                 cloud.enable_time_authority();
             }
