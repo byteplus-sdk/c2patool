@@ -1,0 +1,27 @@
+{
+  "claim_generator_info": [
+    { 
+      "name": "ByteDance AI Generation Service",
+      "version": "0.0.1" ,
+      "specVersion": "2.4"
+   }
+  ],
+  "assertions": [
+    {
+      "label": "c2pa.actions.v2",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+            "softwareAgent": {
+              "name": "modelArck 0.57.0",
+              "version": "1.0.0"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

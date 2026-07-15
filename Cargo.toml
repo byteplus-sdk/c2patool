@@ -20,7 +20,7 @@ networking = ["c2pa/default_http"]
 [dependencies]
 anyhow = "1.0"
 atree = "0.5.4"
-c2pa = { git = "https://github.com/contentauth/c2pa-rs", rev = "350e138eb4f5c86e96ec33f4a51bba5494283a92", features = [
+c2pa = { version = "0.89.3", features = [
     "fetch_remote_manifests",
     "file_io",
     "add_thumbnails",

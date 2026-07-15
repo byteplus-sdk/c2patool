@@ -19,9 +19,9 @@ component.jpg
 create.jpg
 *.tar
 
-# Local test manifests (samples in cli/tests/fixtures are still tracked)
-m.json
-create.json
-opened.json
-transcoded.json
-component.json
+# Local test manifests (samples in tests/ are still tracked)
+/m.json
+/create.json
+/opened.json
+/transcoded.json
+/component.json

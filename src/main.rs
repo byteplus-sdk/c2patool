@@ -526,9 +526,16 @@ fn load_ingredient(path: &Path) -> Result<Ingredient> {
         }
         Ok(ingredient)
     } else {
-        #[allow(deprecated)]
-        let result = Ingredient::from_file(path)?;
-        Ok(result)
+        let mut file = File::open(path)?;
+        let format = format_from_path(path)
+            .ok_or_else(|| anyhow!("Could not determine format from path: {:?}", path))?;
+        let mut builder = Builder::default();
+        builder.add_ingredient_from_stream("{}", &format, &mut file)?;
+        builder
+            .definition
+            .ingredients
+            .pop()
+            .ok_or_else(|| anyhow!("Failed to load ingredient from {:?}", path))
     }
 }
 
@@ -1156,8 +1163,7 @@ fn do_main() -> Result<()> {
         // note: This could be treated as an update manifest eventually since the image is the same
         let has_parent = builder.definition.ingredients.iter().any(|i| i.is_parent());
         if !has_parent && !is_fragment {
-            #[allow(deprecated)]
-            let mut source_ingredient = Ingredient::from_file(path)?;
+            let mut source_ingredient = load_ingredient(path)?;
             if source_ingredient.manifest_data().is_some() {
                 source_ingredient.set_is_parent();
                 builder.add_ingredient(source_ingredient);
@@ -1422,10 +1428,19 @@ fn do_main() -> Result<()> {
         }
         create_dir_all(&output)?;
         if args.ingredient {
-            #[allow(deprecated)]
-            let report = Ingredient::from_file_with_folder(path, &output)
-                .map_err(special_errs)?
-                .to_string();
+            let mut builder = Builder::from_shared_context(&context);
+            let ingredient = builder
+                .add_ingredient_from_stream(
+                    "{}",
+                    &format_from_path(path).ok_or(c2pa::Error::UnsupportedType)?,
+                    &mut File::open(path)?,
+                )
+                .map_err(special_errs)?;
+            // write resources to the output folder explicitly
+            for (id, data) in ingredient.resources().resources() {
+                std::fs::write(output.join(id), data)?;
+            }
+            let report = ingredient.to_string();
             File::create(output.join("ingredient.json"))?.write_all(&report.into_bytes())?;
             println!("Ingredient report written to the directory {:?}", &output);
         } else {
@@ -1444,8 +1459,14 @@ fn do_main() -> Result<()> {
             println!("Manifest report written to the directory {:?}", &output);
         }
     } else if args.ingredient {
-        #[allow(deprecated)]
-        let ingredient = Ingredient::from_file(path).map_err(special_errs)?;
+        let mut builder = Builder::from_shared_context(&context);
+        let ingredient = builder
+            .add_ingredient_from_stream(
+                r#"{"relationship":"component-of"}"#,
+                &format_from_path(path).ok_or(c2pa::Error::UnsupportedType)?,
+                &mut File::open(path)?,
+            )
+            .map_err(special_errs)?;
         println!("{}", ingredient)
     } else if let Some(Commands::Fragment {
         fragments_glob: Some(fg),

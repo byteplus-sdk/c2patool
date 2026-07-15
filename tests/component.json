@@ -1,0 +1,60 @@
+{
+  "claim_generator_info": [
+    {
+      "name": "ByteDance AI Video Synthesis Service",
+      "version": "1.0.0",
+      "specVersion": "2.2"
+    }
+  ],
+
+  "ingredients": [
+    {
+      "title": "libpng-test.png",
+      "format": "image/png",
+      "instance_id": "xmp.iid:a1b2c3d4-0001-4000-a000-000000000001",
+      "relationship": "componentOf",
+      "file": "tests/fixtures/libpng-test.png"
+    },
+    {
+      "title": "verify.jpeg",
+      "format": "image/jpeg",
+      "instance_id": "xmp.iid:a1b2c3d4-0002-4000-a000-000000000002",
+      "relationship": "componentOf",
+      "file": "tests/fixtures/verify.jpeg"
+    },
+    {
+      "title": "c.jpg",
+      "format": "image/jpeg",
+      "instance_id": "xmp.iid:a1b2c3d4-0003-4000-a000-000000000003",
+      "relationship": "componentOf",
+      "file": "tests/fixtures/C.jpg"
+    }
+  ],
+
+  "assertions": [
+    {
+      "label": "c2pa.actions.v2",
+      "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/compositeWithTrainedAlgorithmicMedia",
+            "softwareAgent": {
+              "name": "ByteDance AI Video Synthesis Service",
+              "version": "1.0.0"
+            },
+            "parameters": {
+              "ingredientIds": [
+                "xmp.iid:a1b2c3d4-0001-4000-a000-000000000001",
+                "xmp.iid:a1b2c3d4-0002-4000-a000-000000000002",
+                "xmp.iid:a1b2c3d4-0003-4000-a000-000000000003"
+              ]
+            }
+          }
+        ],
+        "allActionsIncluded": true
+      }
+    }
+  ]
+}
