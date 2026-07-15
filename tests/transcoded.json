@@ -1,0 +1,40 @@
+{
+  "claim_generator_info": [
+    { 
+      "name": "ByteDace Ai Video Generation Service",
+      "version": "0.0.1", 
+      "specVersion": "2.4"
+   }
+  ],
+  "assertions": [
+    {
+      "label": "c2pa.actions.v2",
+       "created": true,
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.opened",
+            "parameters": {
+              "ingredients": [
+                {
+                  "url": "self#jumbf=c2pa.assertions/c2pa.ingredient.v3",
+                  "hash": "c2VsZi1maWxsZWQ="
+                }
+              ]
+            }
+          },
+          {
+            "action": "c2pa.transcoded",
+            "parameters": {
+              "com.volcengine.c2pa.description": "transcoded C.jpg to D.jpg with lower resolution"
+            },
+             "softwareAgent": {
+              "name": "Bytedance Media Transcode Service",
+              "version": "1.0.0"
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
