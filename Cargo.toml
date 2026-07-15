@@ -2,29 +2,25 @@
 name = "c2patool"
 default-run = "c2patool"
 version = "0.26.59"
-description = "Tool for displaying and creating C2PA manifests."
+description = "Tool for displaying and creating C2PA manifests (Volcengine ToB variant)."
 authors = [
     "Gavin Peacock <gpeacock@adobe.com>",
     "Maurice Fisher <mfisher@adobe.com>",
 ]
 license = "MIT OR Apache-2.0"
-documentation = "https://opensource.contentauthenticity.org/docs/c2patool"
 readme = "README.md"
 keywords = ["c2pa", "xmp", "metadata"]
 edition = "2018"
 homepage = "https://contentauthenticity.org"
-repository = "https://github.com/contentauth/c2pa-rs/tree/main/cli"
 
 [features]
 default = ["networking"]
-networking = [
-    "c2pa/default_http"
-]
+networking = ["c2pa/default_http"]
 
 [dependencies]
 anyhow = "1.0"
 atree = "0.5.4"
-c2pa = { path = "../sdk", version = "0.84.1", features = [
+c2pa = { git = "https://github.com/contentauth/c2pa-rs", rev = "350e138eb4f5c86e96ec33f4a51bba5494283a92", features = [
     "fetch_remote_manifests",
     "file_io",
     "add_thumbnails",
