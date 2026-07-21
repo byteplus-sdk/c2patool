@@ -19,7 +19,7 @@
       "title": "verify.jpeg",
       "format": "image/jpeg",
       "instance_id": "xmp.iid:a1b2c3d4-0002-4000-a000-000000000002",
-      "relationship": "componentOf",
+      "relationship": "componentOf",const CRJSON_SPEC_VERSION: &str = "2.3.0";const CRJSON_SPEC_VERSION: &str = "2.3.0";const CRJSON_SPEC_VERSION: &str = "2.3.0";const CRJSON_SPEC_VERSION: &str = "2.3.0";
       "file": "tests/fixtures/verify.jpeg"
     },
     {

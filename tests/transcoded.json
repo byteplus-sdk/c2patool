@@ -9,7 +9,7 @@
   "assertions": [
     {
       "label": "c2pa.actions.v2",
-       "created": true,
+      "created": true,
       "data": {
         "actions": [
           {
@@ -26,7 +26,7 @@
           {
             "action": "c2pa.transcoded",
             "parameters": {
-              "com.volcengine.c2pa.description": "transcoded C.jpg to D.jpg with lower resolution"
+              "description": "transcoded C.jpg to D.jpg with lower resolution"
             },
              "softwareAgent": {
               "name": "Bytedance Media Transcode Service",
