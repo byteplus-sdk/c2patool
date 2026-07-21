@@ -181,13 +181,13 @@ struct C2paSignResult {
 
 /// 火山 ToB 云签 Signer 配置。
 pub struct VolcSignerConfig {
-    pub host: String,         // 例：https://open.volcengineapi.com
-    pub region: String,        // 例：cn-north-1
-    pub service: String,       // 例：c2pa_tob
-    pub version: String,       // 例：1.0
-    pub access_key: String,    // AK
-    pub secret_key: String,    // SK
-    pub instance_id: String,   // 实例 ID（C2PA 证书实例）
+    pub host: String,              // 例：https://open.volcengineapi.com
+    pub region: String,            // 例：cn-north-1
+    pub service: String,           // 例：c2pa_tob
+    pub version: String,           // 例：1.0
+    pub access_key: String,        // AK
+    pub secret_key: String,        // SK
+    pub instance_id: String,       // 实例 ID（C2PA 证书实例）
     pub signing_algorithm: String, // 火山签名算法名，例：RSASSA_PSS_SHA_256
     pub reserve_size: usize,
 }
@@ -212,18 +212,16 @@ impl CloudSigner {
         .map_err(|e| CloudSignError::InvalidUrl(format!("serialize GetC2PAInstance: {e}")))?;
 
         let response = volc_call(&cfg, "GetC2PAInstance", &body)?;
-        let result = response
-            .result
-            .as_ref()
-            .ok_or_else(|| CloudSignError::FailedCertResponse(
-                "GetC2PAInstance".to_string(),
-                response.clone_meta(),
-            ))?;
-        let parsed: GetC2PAInstanceResult = serde_json::from_value(result.clone())
-            .map_err(|_| CloudSignError::FailedCertResponse(
-                "GetC2PAInstance".to_string(),
-                response.clone_meta(),
-            ))?;
+        let result = response.result.as_ref().ok_or_else(|| {
+            CloudSignError::FailedCertResponse("GetC2PAInstance".to_string(), response.clone_meta())
+        })?;
+        let parsed: GetC2PAInstanceResult =
+            serde_json::from_value(result.clone()).map_err(|_| {
+                CloudSignError::FailedCertResponse(
+                    "GetC2PAInstance".to_string(),
+                    response.clone_meta(),
+                )
+            })?;
 
         // 拼接证书 + 证书链。两者均为 PEM。
         let mut pem_buf = Vec::new();
@@ -265,8 +263,8 @@ impl CloudSigner {
 
     fn do_sign(&self, data: &[u8]) -> Result<Vec<u8>, CloudSignError> {
         // 先按 SigningAlgorithm 对应的摘要算法计算 digest。
-        let digest = openssl::hash::hash(self.digest, data)
-            .map_err(CloudSignError::HashDataFailed)?;
+        let digest =
+            openssl::hash::hash(self.digest, data).map_err(CloudSignError::HashDataFailed)?;
         let req = C2paSignRequest {
             instance_id: &self.cfg.instance_id,
             message: base64::engine::general_purpose::STANDARD.encode(&digest),
@@ -277,18 +275,12 @@ impl CloudSigner {
             .map_err(|e| CloudSignError::InvalidUrl(format!("serialize C2PASign: {e}")))?;
 
         let response = volc_call(&self.cfg, "C2PASign", &body)?;
-        let result = response
-            .result
-            .as_ref()
-            .ok_or_else(|| CloudSignError::FailedSignResponse(
-                "C2PASign".to_string(),
-                response.clone_meta(),
-            ))?;
-        let parsed: C2paSignResult = serde_json::from_value(result.clone())
-            .map_err(|_| CloudSignError::FailedSignResponse(
-                "C2PASign".to_string(),
-                response.clone_meta(),
-            ))?;
+        let result = response.result.as_ref().ok_or_else(|| {
+            CloudSignError::FailedSignResponse("C2PASign".to_string(), response.clone_meta())
+        })?;
+        let parsed: C2paSignResult = serde_json::from_value(result.clone()).map_err(|_| {
+            CloudSignError::FailedSignResponse("C2PASign".to_string(), response.clone_meta())
+        })?;
 
         base64::engine::general_purpose::STANDARD
             .decode(parsed.signature.as_bytes())
@@ -412,9 +404,7 @@ fn volc_call(
     // 这样不依赖 HTTP 客户端实际写到线上的 Host header 形态，避免端口/大小写差异导致
     // SignatureDoesNotMatch。
     let signed_headers = "x-content-sha256;x-date";
-    let canonical_headers = format!(
-        "x-content-sha256:{body_sha256_hex}\nx-date:{x_date}\n"
-    );
+    let canonical_headers = format!("x-content-sha256:{body_sha256_hex}\nx-date:{x_date}\n");
 
     let canonical_request = format!(
         "POST\n{canonical_uri}\n{canonical_query}\n{canonical_headers}\n{signed_headers}\n{body_sha256_hex}"
@@ -424,13 +414,9 @@ fn volc_call(
             .map_err(CloudSignError::HashDataFailed)?,
     );
 
-    let credential_scope = format!(
-        "{short_date}/{}/{}/request",
-        cfg.region, cfg.service
-    );
-    let string_to_sign = format!(
-        "HMAC-SHA256\n{x_date}\n{credential_scope}\n{canonical_request_hash}"
-    );
+    let credential_scope = format!("{short_date}/{}/{}/request", cfg.region, cfg.service);
+    let string_to_sign =
+        format!("HMAC-SHA256\n{x_date}\n{credential_scope}\n{canonical_request_hash}");
 
     // kSigning = HMAC(HMAC(HMAC(HMAC(SK, ShortDate), Region), Service), "request")
     let k_date = hmac_sha256(cfg.secret_key.as_bytes(), short_date.as_bytes())?;
@@ -481,10 +467,7 @@ fn volc_call(
         .map_err(CloudSignError::SendRequest)?;
 
     let status = http_resp.status().as_u16();
-    let body_text = http_resp
-        .body_mut()
-        .read_to_string()
-        .unwrap_or_default();
+    let body_text = http_resp.body_mut().read_to_string().unwrap_or_default();
 
     if debug_on {
         eprintln!("[volc-debug] <<< HTTP {status}");
@@ -509,7 +492,9 @@ fn volc_call(
         if let Some(err) = &meta.error {
             // 写回 url 上下文然后返回错误。
             return Err(match action {
-                "C2PASign" => CloudSignError::FailedSignResponse(url, full.clone_meta_with_err(err)),
+                "C2PASign" => {
+                    CloudSignError::FailedSignResponse(url, full.clone_meta_with_err(err))
+                }
                 _ => CloudSignError::FailedCertResponse(url, full.clone_meta_with_err(err)),
             });
         }
@@ -541,20 +526,17 @@ impl VolcResponseFull {
 
     fn clone_meta(&self) -> VolcResponse {
         VolcResponse {
-            response_metadata: self
-                .response_metadata
-                .as_ref()
-                .map(|m| ResponseMetadata {
-                    request_id: m.request_id.clone(),
-                    action: m.action.clone(),
-                    region: m.region.clone(),
-                    service: m.service.clone(),
-                    version: m.version.clone(),
-                    error: m.error.as_ref().map(|e| TopError {
-                        code: e.code.clone(),
-                        message: e.message.clone(),
-                    }),
+            response_metadata: self.response_metadata.as_ref().map(|m| ResponseMetadata {
+                request_id: m.request_id.clone(),
+                action: m.action.clone(),
+                region: m.region.clone(),
+                service: m.service.clone(),
+                version: m.version.clone(),
+                error: m.error.as_ref().map(|e| TopError {
+                    code: e.code.clone(),
+                    message: e.message.clone(),
                 }),
+            }),
             result: self.result.clone(),
         }
     }
@@ -573,11 +555,9 @@ impl VolcResponseFull {
 
 fn hmac_sha256(key: &[u8], data: &[u8]) -> Result<Vec<u8>, CloudSignError> {
     let pkey = PKey::hmac(key).map_err(CloudSignError::HmacError)?;
-    let mut signer = OpenSslSigner::new(MessageDigest::sha256(), &pkey)
-        .map_err(CloudSignError::HmacError)?;
-    signer
-        .update(data)
-        .map_err(CloudSignError::HmacError)?;
+    let mut signer =
+        OpenSslSigner::new(MessageDigest::sha256(), &pkey).map_err(CloudSignError::HmacError)?;
+    signer.update(data).map_err(CloudSignError::HmacError)?;
     signer.sign_to_vec().map_err(CloudSignError::HmacError)
 }
 
