@@ -169,38 +169,56 @@ struct CliArgs {
     #[clap(long, hide = true, default_value("20000"))]
     reserve_size: usize,
 
-    /// Cloud signer endpoint host (火山 OpenAPI 网关地址，例：
-    /// `https://open.volcengineapi.com`)。提供本参数即启用云签模式。
+    /// Cloud signer endpoint host. Providing this option enables cloud signing.
     #[clap(long)]
     signer_url: Option<String>,
 
-    /// 火山 AccessKey ID。云签模式必填。
-    #[clap(long, default_value = "")]
-    volc_ak: String,
+    /// Access key ID. Required in cloud signing mode.
+    #[clap(
+        long = "access-key",
+        alias = "volc-ak",
+        env = "SIGNER_ACCESS_KEY",
+        default_value = ""
+    )]
+    access_key: String,
 
-    /// 火山 SecretAccessKey。云签模式必填，可通过环境变量 `VOLC_SECRET_KEY` 注入。
-    #[clap(long, env = "VOLC_SECRET_KEY", default_value = "")]
-    volc_sk: String,
+    /// Secret access key. Required in cloud signing mode.
+    #[clap(
+        long = "secret-key",
+        alias = "volc-sk",
+        env = "SIGNER_SECRET_KEY",
+        default_value = ""
+    )]
+    secret_key: String,
 
-    /// 服务地区（例：cn-north-1）。
-    #[clap(long, default_value = "cn-north-1")]
-    volc_region: String,
+    /// Cloud service region, for example `cn-north-1`.
+    #[clap(long, alias = "volc-region", default_value = "cn-north-1")]
+    region: String,
 
-    /// 服务名称（OpenAPI Service / ServiceName 头）。
-    #[clap(long, default_value = "c2pa_tob")]
-    volc_service: String,
+    /// OpenAPI service name.
+    #[clap(long, alias = "volc-service", default_value = "c2pa_tob")]
+    service: String,
 
-    /// OpenAPI Version。
-    #[clap(long, default_value = "1.0")]
-    volc_version: String,
+    /// OpenAPI version.
+    #[clap(long = "api-version", alias = "volc-version", default_value = "1.0")]
+    api_version: String,
 
-    /// C2PA 证书实例 ID（GetC2PAInstance/C2PASign 的 InstanceId）。
-    #[clap(long, default_value = "")]
-    volc_instance_id: String,
+    /// C2PA certificate instance ID used by GetC2PAInstance and C2PASign.
+    #[clap(
+        long = "instance-id",
+        alias = "volc-instance-id",
+        env = "SIGNER_INSTANCE_ID",
+        default_value = ""
+    )]
+    instance_id: String,
 
-    /// 火山签名算法（DIGEST 模式下使用），默认 RSASSA_PSS_SHA_256。
-    #[clap(long, default_value = "RSASSA_PSS_SHA_256")]
-    volc_signing_algorithm: String,
+    /// Cloud signing algorithm used in DIGEST mode.
+    #[clap(
+        long = "signing-algorithm",
+        alias = "volc-signing-algorithm",
+        default_value = "RSASSA_PSS_SHA_256"
+    )]
+    signing_algorithm: String,
 
     /// Enable timestamping authority during cloud signing.
     #[clap(long)]
@@ -1182,28 +1200,32 @@ fn do_main() -> Result<()> {
         }
 
         // Step 1: build the base C2PA signer.
-        // 优先：当 --signer-url 提供时走火山云签分支（TOB 公有云适配）。
+        // Prefer cloud signing when --signer-url is provided.
         let cloud_for_take: Option<Arc<cloud_signer::CloudSigner>>;
         let c2pa_signer: BoxedSigner = if let Some(host) = args.signer_url.as_ref() {
-            if args.volc_ak.is_empty() || args.volc_sk.is_empty() {
-                bail!("--volc-ak / --volc-sk are required when --signer-url is provided (SK can also be set via VOLC_SECRET_KEY env)");
+            let secret_key = if args.secret_key.is_empty() {
+                env::var("VOLC_SECRET_KEY").unwrap_or_default()
+            } else {
+                args.secret_key.clone()
+            };
+            if args.access_key.is_empty() || secret_key.is_empty() {
+                bail!("--access-key / --secret-key are required when --signer-url is provided (secret key can also be set via SIGNER_SECRET_KEY env)");
             }
-            if args.volc_instance_id.is_empty() {
-                bail!("--volc-instance-id is required when --signer-url is provided");
+            if args.instance_id.is_empty() {
+                bail!("--instance-id is required when --signer-url is provided");
             }
             let cfg = cloud_signer::VolcSignerConfig {
                 host: host.clone(),
-                region: args.volc_region.clone(),
-                service: args.volc_service.clone(),
-                version: args.volc_version.clone(),
-                access_key: args.volc_ak.clone(),
-                secret_key: args.volc_sk.clone(),
-                instance_id: args.volc_instance_id.clone(),
-                signing_algorithm: args.volc_signing_algorithm.clone(),
+                region: args.region.clone(),
+                service: args.service.clone(),
+                version: args.api_version.clone(),
+                access_key: args.access_key.clone(),
+                secret_key,
+                instance_id: args.instance_id.clone(),
+                signing_algorithm: args.signing_algorithm.clone(),
                 reserve_size: args.reserve_size,
             };
-            let mut cloud = cloud_signer::CloudSigner::new(cfg)
-                .map_err(ProcError::SignerError)?;
+            let mut cloud = cloud_signer::CloudSigner::new(cfg).map_err(ProcError::SignerError)?;
             if args.use_time_authority {
                 cloud.enable_time_authority();
             }
@@ -1366,19 +1388,18 @@ fn do_main() -> Result<()> {
                             builder.definition.title = Some(title.to_string_lossy().to_string());
                         }
                     }
-                    let manifest_data = match builder
-                        .sign(signer.as_ref(), &format, &mut source, &mut file)
-                    {
-                        Ok(d) => d,
-                        Err(e) => {
-                            if let Some(cs) =
-                                cloud_for_take.as_ref().and_then(|c| c.take_sign_error())
-                            {
-                                return Err(ProcError::SignerError(cs).into());
+                    let manifest_data =
+                        match builder.sign(signer.as_ref(), &format, &mut source, &mut file) {
+                            Ok(d) => d,
+                            Err(e) => {
+                                if let Some(cs) =
+                                    cloud_for_take.as_ref().and_then(|c| c.take_sign_error())
+                                {
+                                    return Err(ProcError::SignerError(cs).into());
+                                }
+                                return Err(anyhow::Error::from(e));
                             }
-                            return Err(anyhow::Error::from(e));
-                        }
-                    };
+                        };
 
                     if !output.exists() {
                         // ensure the path to the file exists
@@ -1630,7 +1651,7 @@ pub mod tests {
 
     #[test]
     fn apply_trust_sidecars_reads_official_pem() {
-        const SAMPLE_ANCHOR_PEM: &str = include_str!("../../cli/tests/fixtures/trust/anchors.pem");
+        const SAMPLE_ANCHOR_PEM: &str = include_str!("../tests/fixtures/trust/anchors.pem");
         let tmp = tempdirectory().unwrap();
         let settings_path = tmp.path().join("c2pa.toml");
         write(
