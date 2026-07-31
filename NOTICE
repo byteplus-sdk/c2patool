@@ -1,0 +1,30 @@
+c2patool C2PA cloud signing variant
+
+This repository is derived from the open source c2patool project from the
+Content Authenticity Initiative / C2PA Rust SDK project:
+
+  https://github.com/contentauth/c2pa-rs
+  https://github.com/contentauth/c2patool
+
+Portions of the upstream project are copyright Adobe and other upstream
+contributors, and are licensed under the Apache License, Version 2.0, or the
+MIT License, at your option.
+
+Modifications in this repository include support for compatible C2PA cloud
+signing services used by Volcano Engine and BytePlus deployments, including
+remote signing request construction, cloud signing credential handling, and
+related command-line integration.
+
+Copyright (c) 2026 Beijing Volcano Engine Technology Co., Ltd.
+Copyright (c) 2026 北京火山引擎科技有限公司
+
+Unless otherwise stated in an individual file, this repository is licensed
+under either of:
+
+  * Apache License, Version 2.0
+  * MIT License
+
+at your option.
+
+This notice is provided for attribution purposes and does not modify the
+license terms.
