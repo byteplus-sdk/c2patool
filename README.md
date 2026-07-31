@@ -356,9 +356,22 @@ for:
 
 ## License and Attribution
 
-This repository is derived from the open source `c2patool` project. Keep the
-upstream copyright, license, and attribution requirements when redistributing
-or modifying this project.
+This repository is derived from the open source `c2patool` project and keeps
+the same dual-license model as the upstream C2PA Rust SDK project:
+
+- Apache License, Version 2.0
+- MIT License
+
+You may use this repository under either license, at your option. See
+[`LICENSE-APACHE`](LICENSE-APACHE), [`LICENSE-MIT`](LICENSE-MIT), and
+[`NOTICE`](NOTICE) for the full license and attribution text.
+
+Portions of the upstream project are copyright Adobe and other upstream
+contributors. Keep the upstream copyright, license, and attribution notices
+when redistributing or modifying this project.
 
 Additional changes in this repository add support for compatible C2PA cloud
 signing services used by Volcano Engine and BytePlus deployments.
+
+Copyright (c) 2026 Beijing Volcano Engine Technology Co., Ltd.
+Copyright (c) 2026 北京火山引擎科技有限公司
