@@ -3,7 +3,7 @@
     { 
       "name": "ByteDance AI Generation Service",
       "version": "0.0.1" ,
-      "specVersion": "2.4"
+      "specVersion": "2.4.0"
    }
   ],
   "assertions": [
@@ -20,7 +20,8 @@
               "version": "1.0.0"
             }
           }
-        ]
+        ],
+        "allActionsIncluded": true
       }
     }
   ]

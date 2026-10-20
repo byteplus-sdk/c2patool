@@ -29,9 +29,9 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use c2pa::{
-    create_signer, format_from_path, settings::Settings, BoxedSigner, Builder, CallbackSigner,
-    ClaimGeneratorInfo, Context as C2paContext, Error, Ingredient, ManifestDefinition, Reader,
-    Signer, SigningAlg,
+    create_signer, format_from_path, settings::Settings, BoxedSigner, Builder, BuilderIntent,
+    CallbackSigner, ClaimGeneratorInfo, Context as C2paContext, DigitalSourceType, Error,
+    Ingredient, ManifestDefinition, Reader, Signer, SigningAlg,
 };
 use clap::{Parser, Subcommand};
 use env_logger::Env;
@@ -89,6 +89,14 @@ struct CliArgs {
     /// Path to a parent file.
     #[clap(short, long)]
     parent: Option<PathBuf>,
+
+    /// Digital source type for a new creation (e.g. `digitalCapture`, `empty`).
+    #[clap(long, conflicts_with = "update", conflicts_with = "parent")]
+    create: Option<String>,
+
+    /// Treat this as an update manifest (non-editorial changes to a parent asset).
+    #[clap(long, conflicts_with = "create")]
+    update: bool,
 
     /// Manifest definition passed as a JSON string.
     #[clap(short, long, conflicts_with = "manifest")]
@@ -1090,11 +1098,6 @@ fn do_main() -> Result<()> {
         return Ok(());
     }
 
-    let is_fragment = matches!(
-        &args.command,
-        Some(Commands::Fragment { fragments_glob: _ })
-    );
-
     // configure the SDK
     let mut settings = configure_sdk(&args).context("Could not configure c2pa-rs")?;
     let context = Arc::new(C2paContext::new().with_settings(&settings)?);
@@ -1177,16 +1180,21 @@ fn do_main() -> Result<()> {
             builder.add_ingredient(ingredient);
         }
 
-        // If the source file has a manifest store, and no parent is specified treat the source as a parent.
-        // note: This could be treated as an update manifest eventually since the image is the same
-        let has_parent = builder.definition.ingredients.iter().any(|i| i.is_parent());
-        if !has_parent && !is_fragment {
-            let mut source_ingredient = load_ingredient(path)?;
-            if source_ingredient.manifest_data().is_some() {
-                source_ingredient.set_is_parent();
-                builder.add_ingredient(source_ingredient);
-            }
-        }
+        // The SDK adds the correct inception action and parent ingredient for the
+        // selected intent. Explicit actions in the manifest remain authoritative.
+        let intent = if let Some(source_type_str) = &args.create {
+            let source_type: DigitalSourceType =
+                serde_json::from_value(serde_json::Value::String(source_type_str.clone()))
+                    .with_context(|| {
+                        format!("Invalid --create source type: '{source_type_str}'")
+                    })?;
+            BuilderIntent::Create(source_type)
+        } else if args.update {
+            BuilderIntent::Update
+        } else {
+            BuilderIntent::Edit
+        };
+        builder.set_intent(intent);
 
         if let Some(remote) = args.remote {
             if args.sidecar {
@@ -1663,9 +1671,11 @@ pub mod tests {
         assert!(apply_trust_sidecars(&mut settings, &settings_path).unwrap());
         let ta = settings
             .trust
-            .trust_anchors
+            .anchors
             .as_deref()
-            .expect("trust_anchors");
+            .and_then(|anchors| anchors.first())
+            .expect("anchors");
+        let ta = ta.trust_anchors.as_str();
         assert!(ta.contains("BEGIN CERTIFICATE"));
     }
 }

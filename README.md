@@ -70,12 +70,16 @@ cargo build
 Embed a manifest and sign it with the cloud signer:
 
 ```bash
+export SIGNER_URL="https://open.volcengineapi.com"
+export SIGNER_INSTANCE_ID="your-c2pa-instance-id"
+
 c2patool input.jpg \
   --manifest manifest.json \
   --output output.jpg \
-  --signer-url https://openapi.example.com \
+  --signer-url "$SIGNER_URL" \
   --access-key "$SIGNER_ACCESS_KEY" \
-  --instance-id "your-c2pa-instance-id"
+  --secret-key "$SIGNER_SECRET_KEY" \
+  --instance-id "$SIGNER_INSTANCE_ID"
 ```
 
 Inspect C2PA data in an asset:
@@ -156,17 +160,25 @@ The cloud signer is configured through CLI parameters. Keep
 secrets out of source control and prefer environment variables or a secure
 secret manager in production.
 
-Cloud signer parameters:
+Required parameters for embedding a C2PA manifest with the cloud signer:
 
 | Parameter | Description |
 | --- | --- |
+| `<asset>` | Input asset to embed the C2PA manifest into, for example `input.jpg`. |
+| `--manifest <path>` | Path to the C2PA manifest JSON file. |
+| `--output <path>` | Path for the signed output asset. |
 | `--signer-url <url>` | Cloud signing OpenAPI gateway host. Providing this option enables cloud signing. |
-| `--access-key <ak>` | Access key ID. Required when `--signer-url` is used. Can also be provided with `SIGNER_ACCESS_KEY`. |
-| `--secret-key <sk>` | Secret access key. Required when `--signer-url` is used. Can also be provided with `SIGNER_SECRET_KEY`. |
+| `--access-key <ak>` | Access key ID. Can also be provided with `SIGNER_ACCESS_KEY`. |
+| `--secret-key <sk>` | Secret access key. Can also be provided with `SIGNER_SECRET_KEY`. |
+| `--instance-id <id>` | C2PA certificate instance ID used by `GetC2PAInstance` and `C2PASign`. Can also be provided with `SIGNER_INSTANCE_ID`. |
+
+Optional cloud signer parameters:
+
+| Parameter | Description |
+| --- | --- |
 | `--region <region>` | Service region. Defaults to `cn-north-1`. |
 | `--service <service>` | OpenAPI service name. Defaults to `c2pa_tob`. |
 | `--api-version <version>` | OpenAPI version. Defaults to `1.0`. |
-| `--instance-id <id>` | C2PA certificate instance ID used by `GetC2PAInstance` and `C2PASign`. Required when `--signer-url` is used. Can also be provided with `SIGNER_INSTANCE_ID`. |
 | `--signing-algorithm <alg>` | Cloud signing algorithm. Defaults to `RSASSA_PSS_SHA_256`. |
 | `--use-time-authority` | Enables timestamp authority use during cloud signing. The TSA URL is read from `ta_url` in the manifest signing config or from `C2PA_TA_URL`. |
 
@@ -183,15 +195,18 @@ Supported cloud signing algorithm values:
 Example:
 
 ```bash
-export SIGNER_SECRET_KEY="..."
 export SIGNER_ACCESS_KEY="..."
+export SIGNER_SECRET_KEY="..."
+export SIGNER_INSTANCE_ID="..."
+export SIGNER_URL="https://open.volcengineapi.com"
 
 c2patool input.jpg \
   --manifest manifest.json \
   --output output.jpg \
   --signer-url "$SIGNER_URL" \
   --access-key "$SIGNER_ACCESS_KEY" \
-  --instance-id "your-c2pa-instance-id" \
+  --secret-key "$SIGNER_SECRET_KEY" \
+  --instance-id "$SIGNER_INSTANCE_ID" \
   --region cn-north-1 \
   --service c2pa_tob \
   --api-version 1.0 \
@@ -291,13 +306,16 @@ The following environment variables are read directly by this build:
 ```bash
 export SIGNER_ACCESS_KEY="..."     # Used as --access-key
 export SIGNER_SECRET_KEY="..."     # Used as --secret-key
-export SIGNER_URL="..."            # Used as --signer-url
 export SIGNER_INSTANCE_ID="..."    # Used as --instance-id
 export C2PATOOL_SETTINGS="..."     # Path to the SDK settings file
 export C2PA_PRIVATE_KEY="..."      # Local signer private key material
 export C2PA_SIGN_CERT="..."        # Local signer certificate material
 export C2PA_TA_URL="..."           # Timestamp authority URL
 ```
+
+`--signer-url` does not have a built-in environment variable binding. You can
+still store it in a shell variable such as `SIGNER_URL` and pass it explicitly
+as `--signer-url "$SIGNER_URL"`.
 
 Use the credential names expected by your deployment and avoid committing real
 credential values to the repository.
@@ -314,12 +332,16 @@ credential values to the repository.
 Example:
 
 ```bash
+export SIGNER_URL="https://open.volcengineapi.com"
+export SIGNER_INSTANCE_ID="your-c2pa-instance-id"
+
 c2patool ./assets/input.jpg \
   --manifest ./manifests/example.json \
   --output ./dist/input.c2pa.jpg \
   --signer-url "$SIGNER_URL" \
   --access-key "$SIGNER_ACCESS_KEY" \
-  --instance-id "your-c2pa-instance-id"
+  --secret-key "$SIGNER_SECRET_KEY" \
+  --instance-id "$SIGNER_INSTANCE_ID"
 
 c2patool ./dist/input.c2pa.jpg --info
 c2patool ./dist/input.c2pa.jpg --detailed
