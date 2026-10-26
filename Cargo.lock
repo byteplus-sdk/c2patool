@@ -466,9 +466,9 @@ dependencies = [
 
 [[package]]
 name = "c2pa"
-version = "0.91.4"
+version = "0.91.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c52a95b16ac5f00fc54fe887a8a3bcdfc233fa7bce897c139c627089687005ce"
+checksum = "f95896dabbc80df88a9cca3e967e95c78b3b0906e7e0bea1ea13b87bade7af88"
 dependencies = [
  "asn1-rs",
  "async-generic",
@@ -563,9 +563,9 @@ dependencies = [
 
 [[package]]
 name = "c2pa_raw_crypto"
-version = "0.1.2"
+version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ea8b0035cb7a2d51e0664be21e1f5635d6cb572256beab9a7356b6ca3e3b6743"
+checksum = "38287179bf40cb58a3fafef09ee121b7221d560a76bb6b672742445a2c8db08d"
 dependencies = [
  "const-hex",
  "getrandom 0.2.17",
@@ -579,7 +579,7 @@ dependencies = [
 
 [[package]]
 name = "c2patool"
-version = "0.28.2"
+version = "0.28.3"
 dependencies = [
  "anyhow",
  "assert_cmd",
