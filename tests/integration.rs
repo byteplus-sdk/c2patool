@@ -121,6 +121,48 @@ fn tool_default_edit_adds_opened_action_for_parent() -> Result<(), Box<dyn Error
 }
 
 #[test]
+fn tool_parent_ingredient_uses_configured_thumbnail_setting() -> Result<(), Box<dyn Error>> {
+    let settings_path = temp_path("no_thumbnail.toml");
+    fs::write(&settings_path, "[builder.thumbnail]\nenabled = false\n")?;
+    let created_path = temp_path("no_thumbnail_created.jpg");
+    let transcoded_path = temp_path("no_thumbnail_transcoded.jpg");
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/create.json")
+        .arg("--settings")
+        .arg(&settings_path)
+        .arg("-o")
+        .arg(&created_path)
+        .arg("-f")
+        .assert()
+        .success();
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/transcoded.json")
+        .arg("-p")
+        .arg(&created_path)
+        .arg("--settings")
+        .arg(&settings_path)
+        .arg("-o")
+        .arg(&transcoded_path)
+        .arg("-f")
+        .assert()
+        .success();
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(&transcoded_path)
+        .arg("--crjson")
+        .assert()
+        .success()
+        .stdout(str::contains("c2pa.thumbnail").not());
+    Ok(())
+}
+
+#[test]
 fn tool_default_edit_preserves_explicit_created_action() -> Result<(), Box<dyn Error>> {
     Command::new(cargo::cargo_bin!("c2patool"))
         .arg(fixture_path(TEST_IMAGE))

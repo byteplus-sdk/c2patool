@@ -535,7 +535,7 @@ fn ext_normal(path: &Path) -> String {
 }
 
 // loads an ingredient, allowing for a folder or json ingredient
-fn load_ingredient(path: &Path) -> Result<Ingredient> {
+fn load_ingredient(path: &Path, context: &Arc<C2paContext>) -> Result<Ingredient> {
     // if the path is a folder, look for ingredient.json
     let mut path_buf = PathBuf::from(path);
     let path = if path.is_dir() {
@@ -555,7 +555,7 @@ fn load_ingredient(path: &Path) -> Result<Ingredient> {
         let mut file = File::open(path)?;
         let format = format_from_path(path)
             .ok_or_else(|| anyhow!("Could not determine format from path: {:?}", path))?;
-        let mut builder = Builder::default();
+        let mut builder = Builder::from_shared_context(context);
         builder.add_ingredient_from_stream("{}", &format, &mut file)?;
         builder
             .definition
@@ -1169,13 +1169,13 @@ fn do_main() -> Result<()> {
                         path = base.join(&path)
                     }
                 }
-                let ingredient = load_ingredient(&path)?;
+                let ingredient = load_ingredient(&path, &context)?;
                 builder.add_ingredient(ingredient);
             }
         }
 
         if let Some(parent_path) = args.parent {
-            let mut ingredient = load_ingredient(&parent_path)?;
+            let mut ingredient = load_ingredient(&parent_path, &context)?;
             ingredient.set_is_parent();
             builder.add_ingredient(ingredient);
         }
