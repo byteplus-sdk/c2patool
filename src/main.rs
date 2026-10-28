@@ -29,9 +29,9 @@ use std::{
 
 use anyhow::{anyhow, bail, Context, Result};
 use c2pa::{
-    create_signer, format_from_path, settings::Settings, BoxedSigner, Builder, CallbackSigner,
-    ClaimGeneratorInfo, Context as C2paContext, Error, Ingredient, ManifestDefinition, Reader,
-    Signer, SigningAlg,
+    create_signer, format_from_path, settings::Settings, BoxedSigner, Builder, BuilderIntent,
+    CallbackSigner, ClaimGeneratorInfo, Context as C2paContext, DigitalSourceType, Error,
+    Ingredient, ManifestDefinition, Reader, Signer, SigningAlg,
 };
 use clap::{Parser, Subcommand};
 use env_logger::Env;
@@ -89,6 +89,14 @@ struct CliArgs {
     /// Path to a parent file.
     #[clap(short, long)]
     parent: Option<PathBuf>,
+
+    /// Digital source type for a new creation (e.g. `digitalCapture`, `empty`).
+    #[clap(long, conflicts_with = "update", conflicts_with = "parent")]
+    create: Option<String>,
+
+    /// Treat this as an update manifest (non-editorial changes to a parent asset).
+    #[clap(long, conflicts_with = "create")]
+    update: bool,
 
     /// Manifest definition passed as a JSON string.
     #[clap(short, long, conflicts_with = "manifest")]
@@ -527,7 +535,7 @@ fn ext_normal(path: &Path) -> String {
 }
 
 // loads an ingredient, allowing for a folder or json ingredient
-fn load_ingredient(path: &Path) -> Result<Ingredient> {
+fn load_ingredient(path: &Path, context: &Arc<C2paContext>) -> Result<Ingredient> {
     // if the path is a folder, look for ingredient.json
     let mut path_buf = PathBuf::from(path);
     let path = if path.is_dir() {
@@ -547,7 +555,7 @@ fn load_ingredient(path: &Path) -> Result<Ingredient> {
         let mut file = File::open(path)?;
         let format = format_from_path(path)
             .ok_or_else(|| anyhow!("Could not determine format from path: {:?}", path))?;
-        let mut builder = Builder::default();
+        let mut builder = Builder::from_shared_context(context);
         builder.add_ingredient_from_stream("{}", &format, &mut file)?;
         builder
             .definition
@@ -1090,11 +1098,6 @@ fn do_main() -> Result<()> {
         return Ok(());
     }
 
-    let is_fragment = matches!(
-        &args.command,
-        Some(Commands::Fragment { fragments_glob: _ })
-    );
-
     // configure the SDK
     let mut settings = configure_sdk(&args).context("Could not configure c2pa-rs")?;
     let context = Arc::new(C2paContext::new().with_settings(&settings)?);
@@ -1166,27 +1169,32 @@ fn do_main() -> Result<()> {
                         path = base.join(&path)
                     }
                 }
-                let ingredient = load_ingredient(&path)?;
+                let ingredient = load_ingredient(&path, &context)?;
                 builder.add_ingredient(ingredient);
             }
         }
 
         if let Some(parent_path) = args.parent {
-            let mut ingredient = load_ingredient(&parent_path)?;
+            let mut ingredient = load_ingredient(&parent_path, &context)?;
             ingredient.set_is_parent();
             builder.add_ingredient(ingredient);
         }
 
-        // If the source file has a manifest store, and no parent is specified treat the source as a parent.
-        // note: This could be treated as an update manifest eventually since the image is the same
-        let has_parent = builder.definition.ingredients.iter().any(|i| i.is_parent());
-        if !has_parent && !is_fragment {
-            let mut source_ingredient = load_ingredient(path)?;
-            if source_ingredient.manifest_data().is_some() {
-                source_ingredient.set_is_parent();
-                builder.add_ingredient(source_ingredient);
-            }
-        }
+        // The SDK adds the correct inception action and parent ingredient for the
+        // selected intent. Explicit actions in the manifest remain authoritative.
+        let intent = if let Some(source_type_str) = &args.create {
+            let source_type: DigitalSourceType =
+                serde_json::from_value(serde_json::Value::String(source_type_str.clone()))
+                    .with_context(|| {
+                        format!("Invalid --create source type: '{source_type_str}'")
+                    })?;
+            BuilderIntent::Create(source_type)
+        } else if args.update {
+            BuilderIntent::Update
+        } else {
+            BuilderIntent::Edit
+        };
+        builder.set_intent(intent);
 
         if let Some(remote) = args.remote {
             if args.sidecar {
@@ -1663,9 +1671,11 @@ pub mod tests {
         assert!(apply_trust_sidecars(&mut settings, &settings_path).unwrap());
         let ta = settings
             .trust
-            .trust_anchors
+            .anchors
             .as_deref()
-            .expect("trust_anchors");
+            .and_then(|anchors| anchors.first())
+            .expect("anchors");
+        let ta = ta.trust_anchors.as_str();
         assert!(ta.contains("BEGIN CERTIFICATE"));
     }
 }

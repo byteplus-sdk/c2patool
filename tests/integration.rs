@@ -100,6 +100,120 @@ fn tool_embed_jpeg_report() -> Result<(), Box<dyn Error>> {
         .stdout(str::contains("My Title"));
     Ok(())
 }
+
+#[test]
+fn tool_default_edit_adds_opened_action_for_parent() -> Result<(), Box<dyn Error>> {
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/transcoded.json")
+        .arg("-p")
+        .arg(fixture_path(TEST_IMAGE_WITH_MANIFEST))
+        .arg("-o")
+        .arg(temp_path("intent_edit.jpg"))
+        .arg("-f")
+        .assert()
+        .success()
+        .stdout(str::contains(r#""validation_state": "Valid""#))
+        .stdout(str::contains(r#""action": "c2pa.opened""#))
+        .stdout(str::contains(r#""action": "c2pa.transcoded""#));
+    Ok(())
+}
+
+#[test]
+fn tool_parent_ingredient_uses_configured_thumbnail_setting() -> Result<(), Box<dyn Error>> {
+    let settings_path = temp_path("no_thumbnail.toml");
+    fs::write(&settings_path, "[builder.thumbnail]\nenabled = false\n")?;
+    let created_path = temp_path("no_thumbnail_created.jpg");
+    let transcoded_path = temp_path("no_thumbnail_transcoded.jpg");
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/create.json")
+        .arg("--settings")
+        .arg(&settings_path)
+        .arg("-o")
+        .arg(&created_path)
+        .arg("-f")
+        .assert()
+        .success();
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/transcoded.json")
+        .arg("-p")
+        .arg(&created_path)
+        .arg("--settings")
+        .arg(&settings_path)
+        .arg("-o")
+        .arg(&transcoded_path)
+        .arg("-f")
+        .assert()
+        .success();
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(&transcoded_path)
+        .arg("--crjson")
+        .assert()
+        .success()
+        .stdout(str::contains("c2pa.thumbnail").not());
+    Ok(())
+}
+
+#[test]
+fn tool_default_edit_preserves_explicit_created_action() -> Result<(), Box<dyn Error>> {
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/create.json")
+        .arg("-o")
+        .arg(temp_path("intent_created.jpg"))
+        .arg("-f")
+        .assert()
+        .success()
+        .stdout(str::contains(r#""validation_state": "Valid""#))
+        .stdout(str::contains(r#""action": "c2pa.created""#))
+        .stdout(str::contains(r#""action": "c2pa.opened""#).not());
+    Ok(())
+}
+
+#[test]
+fn tool_create_conflicts_with_update_and_parent() -> Result<(), Box<dyn Error>> {
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/create.json")
+        .arg("-o")
+        .arg(temp_path("intent_conflict.jpg"))
+        .arg("--create")
+        .arg("empty")
+        .arg("--update")
+        .assert()
+        .failure()
+        .stderr(str::contains(
+            "the argument '--create <CREATE>' cannot be used with '--update'",
+        ));
+
+    Command::new(cargo::cargo_bin!("c2patool"))
+        .arg(fixture_path(TEST_IMAGE))
+        .arg("-m")
+        .arg("tests/create.json")
+        .arg("-o")
+        .arg(temp_path("intent_parent_conflict.jpg"))
+        .arg("--create")
+        .arg("empty")
+        .arg("-p")
+        .arg(fixture_path(TEST_IMAGE_WITH_MANIFEST))
+        .assert()
+        .failure()
+        .stderr(str::contains(
+            "the argument '--create <CREATE>' cannot be used with '--parent <PARENT>'",
+        ));
+    Ok(())
+}
+
 #[test]
 fn tool_fs_output_report() -> Result<(), Box<dyn Error>> {
     let path = temp_path("output_dir");
