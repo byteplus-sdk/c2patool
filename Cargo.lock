@@ -466,9 +466,9 @@ dependencies = [
 
 [[package]]
 name = "c2pa"
-version = "0.91.6"
+version = "0.91.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f95896dabbc80df88a9cca3e967e95c78b3b0906e7e0bea1ea13b87bade7af88"
+checksum = "f258d5bfe6465d1a5c570d32b70a261f35e4e45a753e7122a88d3ba0472999b0"
 dependencies = [
  "asn1-rs",
  "async-generic",
@@ -523,6 +523,8 @@ dependencies = [
  "regex",
  "reqwest",
  "riff",
+ "rustls",
+ "rustls-webpki",
  "serde",
  "serde-transcode",
  "serde-wasm-bindgen",
@@ -544,6 +546,7 @@ dependencies = [
  "wasm-bindgen-futures",
  "web-sys",
  "web-time",
+ "webpki-roots",
  "wstd",
  "x509-parser",
  "zeroize",
@@ -579,7 +582,7 @@ dependencies = [
 
 [[package]]
 name = "c2patool"
-version = "0.28.3"
+version = "0.28.4"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -3156,9 +3159,9 @@ dependencies = [
 
 [[package]]
 name = "rustls-webpki"
-version = "0.103.13"
+version = "0.103.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "61c429a8649f110dddef65e2a5ad240f747e85f7758a6bccc7e5777bd33f756e"
+checksum = "4443b1b6d39d7c663139942cc4558262562d2c84123bb6282ef177009ca8b281"
 dependencies = [
  "ring",
  "rustls-pki-types",
@@ -4250,9 +4253,9 @@ dependencies = [
 
 [[package]]
 name = "webpki-roots"
-version = "1.0.8"
+version = "1.0.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf85cb06032201fa7c6f829d7db5a7e5aa45bcc0655327713065f6f0576731bf"
+checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
 ]
